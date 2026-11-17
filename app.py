@@ -159,7 +159,7 @@ DISPLAY_LABELS = {
 }
 GERMAN_REFERENCE = {
     "Hours": ["< 1 h", "1 - 8 h", "8 - 40 h", "> 40 h"],
-    "Germany (2022) %": [44, 18, 23, 16],
+    "Germany (2022)": [44, 18, 23, 16],
 }
 REFERENCE_CITATION = (
     "Bundesministerium für Bildung und Forschung (BMBF). (2024). "
