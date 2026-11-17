@@ -380,7 +380,7 @@ def draw_distribution(table, denom):
                 ha="center", va="center")
     ax.set_yticks(positions, labels, fontsize=10)
     ax.set_ylim(cursor + 0.1, -0.1)
-    ax.set_xlim(0, 116)
+    ax.set_xlim(0, 100)
     ax.set_xticks([0, 25, 50, 75, 100], ["0.0%", "25.0%", "50.0%", "75.0%", "100.0%"])
     ax.set_xlabel("Percent of answered responses (%)")
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2,
@@ -416,7 +416,7 @@ def render_question(q, groups, by_q):
         st.warning("The Target Audience is defined by their interest in the topic (4 out of 4 for Q25)")
     if q in CHECKBOX:
         st.caption("Multiple selections allowed. At least one selection defines an answered question; "
-                   "all-blank questions are missing. Percentages can sum to more than 100.0%.")
+                   "all-blank questions are missing. Percentages can sum to more or less than 100.0%.")
     if q in RATING:
         st.caption("Ordered rating codes 1–4: the higher the better.")
     for column in (by_q[q] if q in RATING else [None]):
@@ -437,20 +437,18 @@ def render_question(q, groups, by_q):
             pl.col("Diff_pp").map_elements(
                 lambda value: f"{value:.1f}", return_dtype=pl.String),
         ).rename({
-            "Overall_n": "Overall count", "Overall_%": "Overall %",
-            "Target Audience_n": "Target Audience count", "Target Audience_%": "Target Audience %",
-            "Diff_pp": "Target Audience − Overall (pp)",
+            "Overall_n": "Overall (Count)", "Overall_%": "Overall",
+            "Target Audience_n": "Target Audience (Count)", "Target Audience_%": "Target Audience",
+            "Diff_pp": "Target Audience − Overall (%)",
         }))
         if q in RATING:
             st.table(ordinal_summary(groups, column))
         if q == 10:
-            st.subheader("Germany reference")
-            st.caption("User-provided hour categories and percentages.")
+            st.subheader("Comparison with Germany")
             st.table(pl.DataFrame(GERMAN_REFERENCE).with_columns(
                 pl.col("Hours").str.replace(r"^>", r"\>"),
-                pl.col("Germany (2022) %").map_elements(
+                pl.col("Germany (2022)").map_elements(
                     lambda value: f"{value:.1f}%", return_dtype=pl.String)))
-            st.caption("Supplied percentages total 101.0% and are shown unchanged.")
             st.caption(REFERENCE_CITATION)
         st.caption("Survey percentages use the answered denominators in the chart legends. Differences are Target Audience minus "
                    "Overall in percentage points (pp); undefined percentages remain missing, not zero.")
