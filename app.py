@@ -7,8 +7,8 @@ Free text, including emails, is displayed as literal data without respondent IDs
 for both eligible cohorts; nonblank responses remain unchanged. Training/provider
 pairs stay together. Q21 excludes the parental-leave answer using normalized
 case/whitespace matching only. Consent remains an eligibility rule, not a tab.
-Q10 shows the BMBF 2022 hourly distribution separately because it describes
-individual training activities, not respondents' annual training totals.
+Q4 and Q10 use ascending category order. Q10 retains the user-supplied German
+reference values. Table labels escape Markdown blockquote markers for literal display.
 """
 
 from pathlib import Path
@@ -60,7 +60,7 @@ DISPLAY_LABELS = {
     "Bayern": "Bavaria", "Hessen": "Hesse",
     "Mecklenburg-Vorpommern": "Mecklenburg-Western Pomerania",
     "Nordrhein-Westfalen": "North Rhine-Westphalia", "Sachsen": "Saxony",
-    "5 - 20 Jahre": "5–20 years", "mehr als 20 Jahre": "> 20 years",
+    "5 - 20 Jahre": "5 - 20 years", "mehr als 20 Jahre": "> 20 years",
     "weniger als 5 Jahre": "< 5 years",
     "Andere": "Other", "Coaches / Referenten": "Coaches / speakers",
     "Freischaffende mit pädagogischer Ausbildung": "Freelancers with pedagogical training",
@@ -70,6 +70,7 @@ DISPLAY_LABELS = {
     "weniger als 1.000 € / Jahr": "< €1,000 / year",
     "Gleich": "The same amount", "Mehr": "More", "Weniger": "Less",
     "mehr als 40 h": "> 40 h", "weniger als 1 h": "< 1 h", "mehr als 8 h": "> 8 h",
+    "1 – 8 h": "1 - 8 h", "8 – 40 h": "8 - 40 h",
     "Keine": "None", "Arbeitgeber": "Employer", "Projekt": "Project",
     "Bildungsgutscheine": "Education vouchers", "Förderprogramme": "Funding programs",
     "Persönliche Investments": "Personal investment", "Bildungsurlaub": "Educational leave",
@@ -157,9 +158,8 @@ DISPLAY_LABELS = {
     "Mir fehlt aktuell nichts davon": "I am not currently missing any of these",
 }
 GERMAN_REFERENCE = {
-    "Hours per training activity": ["1–4 h", "5–10 h", "11–20 h", "21–40 h",
-                                    "41–100 h", "101–500 h", "501 h or more"],
-    "Germany (2022) %": [29, 30, 14, 13, 8, 4, 1],
+    "Hours": ["< 1 h", "1 - 8 h", "8 - 40 h", "> 40 h"],
+    "Germany (2022) %": [44, 18, 23, 16],
 }
 REFERENCE_CITATION = (
     "Bundesministerium für Bildung und Forschung (BMBF). (2024). "
@@ -180,11 +180,11 @@ ALLOWED_SINGLE = {
     2: ["Divers", "m", "w"],
     3: ["Baden-Württemberg", "Bayern", "Berlin", "Brandenburg", "Hamburg", "Hessen",
         "Mecklenburg-Vorpommern", "Nordrhein-Westfalen", "Sachsen"],
-    4: ["5 - 20 Jahre", "mehr als 20 Jahre", "weniger als 5 Jahre"],
+    4: ["weniger als 5 Jahre", "5 - 20 Jahre", "mehr als 20 Jahre"],
     5: ["Andere", "Coaches / Referenten", "Freischaffende mit pädagogischer Ausbildung",
         "Freischaffende ohne pädagogische Ausbildung", "Lehrkräfte", "Sozialpädagogen"],
     7: ["1.000 - 5.000 € Jahr", "weniger als 1.000 € / Jahr"],
-    10: ["1 – 8 h", "8 – 40 h", "mehr als 40 h", "weniger als 1 h"],
+    10: ["weniger als 1 h", "1 – 8 h", "8 – 40 h", "mehr als 40 h"],
     11: ["Gleich", "Mehr", "Weniger"],
     27: ["1 - 8 h", "mehr als 8 h", "weniger als 1 h"],
 }
@@ -381,7 +381,7 @@ def draw_distribution(table, denom):
     ax.set_yticks(positions, labels, fontsize=10)
     ax.set_ylim(cursor + 0.1, -0.1)
     ax.set_xlim(0, 116)
-    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xticks([0, 25, 50, 75, 100], ["0.0%", "25.0%", "50.0%", "75.0%", "100.0%"])
     ax.set_xlabel("Percent of answered responses (%)")
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2,
               frameon=False, fontsize=9)
@@ -416,7 +416,7 @@ def render_question(q, groups, by_q):
         st.warning("The Target Audience is defined by their interest in the topic (4 out of 4 for Q25)")
     if q in CHECKBOX:
         st.caption("Multiple selections allowed. At least one selection defines an answered question; "
-                   "all-blank questions are missing. Percentages can sum to more than 100%.")
+                   "all-blank questions are missing. Percentages can sum to more than 100.0%.")
     if q in RATING:
         st.caption("Ordered rating codes 1–4: the higher the better.")
     for column in (by_q[q] if q in RATING else [None]):
@@ -429,7 +429,14 @@ def render_question(q, groups, by_q):
             st.pyplot(fig, width="stretch")
         finally:
             plt.close(fig)
-        st.table(table.with_columns(pl.col("Overall_%", "Target Audience_%", "Diff_pp").round(1)).rename({
+        # Format only the display; retain full precision for calculations.
+        st.table(table.with_columns(
+            pl.col("Response").str.replace(r"^>", r"\>"),
+            pl.col("Overall_%", "Target Audience_%").map_elements(
+                lambda value: f"{value:.1f}%", return_dtype=pl.String),
+            pl.col("Diff_pp").map_elements(
+                lambda value: f"{value:.1f}", return_dtype=pl.String),
+        ).rename({
             "Overall_n": "Overall count", "Overall_%": "Overall %",
             "Target Audience_n": "Target Audience count", "Target Audience_%": "Target Audience %",
             "Diff_pp": "Target Audience − Overall (pp)",
@@ -437,13 +444,13 @@ def render_question(q, groups, by_q):
         if q in RATING:
             st.table(ordinal_summary(groups, column))
         if q == 10:
-            st.subheader("Germany: hours per training activity (2022)")
-            st.caption("BMBF, Table 12 (p. 46): non-formal training activities of adults aged "
-                       "18–64, with details collected for up to four activities per respondent. "
-                       "These are hours per activity, not annual totals, so they cannot be "
-                       "compared directly with Q10 or rebinned into its response categories.")
-            st.table(pl.DataFrame(GERMAN_REFERENCE))
-            st.caption("Published percentages total 99% due to rounding; values are shown unchanged.")
+            st.subheader("Germany reference")
+            st.caption("User-provided hour categories and percentages.")
+            st.table(pl.DataFrame(GERMAN_REFERENCE).with_columns(
+                pl.col("Hours").str.replace(r"^>", r"\>"),
+                pl.col("Germany (2022) %").map_elements(
+                    lambda value: f"{value:.1f}%", return_dtype=pl.String)))
+            st.caption("Supplied percentages total 101.0% and are shown unchanged.")
             st.caption(REFERENCE_CITATION)
         st.caption("Survey percentages use the answered denominators in the chart legends. Differences are Target Audience minus "
                    "Overall in percentage points (pp); undefined percentages remain missing, not zero.")
