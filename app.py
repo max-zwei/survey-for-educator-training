@@ -2,6 +2,13 @@
 
 Install dependencies with: python -m pip install -r requirements.txt
 The two CSV exports are resolved beside this file, regardless of working directory.
+English display translations leave export keys unchanged for validation/counting.
+Free text, including emails, is displayed as literal data without respondent IDs
+for both eligible cohorts; nonblank responses remain unchanged. Training/provider
+pairs stay together. Q21 excludes the parental-leave answer using normalized
+case/whitespace matching only. Consent remains an eligibility rule, not a tab.
+Q10 shows the BMBF 2022 hourly distribution separately because it describes
+individual training activities, not respondents' annual training totals.
 """
 
 from pathlib import Path
@@ -18,7 +25,147 @@ SINGLE = (2, 3, 4, 5, 7, 10, 11, 27)
 CHECKBOX = (6, 8, 13, 14, 15, 16, 17, 19, 20, 24, 26)
 RATING = (22, 25)
 FREE_TEXT = (9, 12, 18, 21, 23, 29)
-QUESTION_IDS = tuple(sorted((1,) + SINGLE + CHECKBOX + RATING))
+QUESTION_IDS = tuple(sorted(SINGLE + CHECKBOX + RATING + FREE_TEXT))
+QUESTION_TITLES = {
+    2: "Which gender do you identify with?",
+    3: "In which federal state do you work?",
+    4: "How many years of professional experience do you have?",
+    5: "Which group do you belong to?",
+    6: "What financial resources do you currently have available for further training and education?",
+    7: "How much were these financial resources in the last 12 months?",
+    8: "Which funding programs?",
+    9: "Other funding",
+    10: "How much time have you invested in further training and education in the last 12 months?",
+    11: "Would you like to invest less, more, or the same amount of time in 2027?",
+    12: "What was the last further training or education program you completed?",
+    13: "Did you make the decision to participate yourself, or was someone else involved in the decision?",
+    14: "What were your criteria for selection?",
+    15: "Why did you choose this training or education program?",
+    16: "What benefits did you hope to gain?",
+    17: "Where did you look for training and education opportunities?",
+    18: "Other search channels",
+    19: "What challenges did you face in selecting, getting approval for, or participating in the training?",
+    20: "What prevented you from participating in more training or education programs?",
+    21: "Other reasons",
+    22: "Regardless of the topic, which format is most attractive to you?",
+    23: "Which training or education program would you recommend? Which one did you particularly enjoy?",
+    24: "What did you particularly like about this training or education program?",
+    25: "How interested are you in the topic of strength and identity development for youth?",
+    26: "What are you currently missing in your work with youth to address strength and identity development?",
+    27: "How much time would you invest in training or education on this topic?",
+    29: "At which email address can we reach you?",
+}
+DISPLAY_LABELS = {
+    "Divers": "Non-binary / diverse", "m": "Male", "w": "Female",
+    "Bayern": "Bavaria", "Hessen": "Hesse",
+    "Mecklenburg-Vorpommern": "Mecklenburg-Western Pomerania",
+    "Nordrhein-Westfalen": "North Rhine-Westphalia", "Sachsen": "Saxony",
+    "5 - 20 Jahre": "5–20 years", "mehr als 20 Jahre": "> 20 years",
+    "weniger als 5 Jahre": "< 5 years",
+    "Andere": "Other", "Coaches / Referenten": "Coaches / speakers",
+    "Freischaffende mit pädagogischer Ausbildung": "Freelancers with pedagogical training",
+    "Freischaffende ohne pädagogische Ausbildung": "Freelancers without pedagogical training",
+    "Lehrkräfte": "Teachers", "Sozialpädagogen": "Social educators",
+    "1.000 - 5.000 € Jahr": "€1,000–5,000 / year",
+    "weniger als 1.000 € / Jahr": "< €1,000 / year",
+    "Gleich": "The same amount", "Mehr": "More", "Weniger": "Less",
+    "mehr als 40 h": "> 40 h", "weniger als 1 h": "< 1 h", "mehr als 8 h": "> 8 h",
+    "Keine": "None", "Arbeitgeber": "Employer", "Projekt": "Project",
+    "Bildungsgutscheine": "Education vouchers", "Förderprogramme": "Funding programs",
+    "Persönliche Investments": "Personal investment", "Bildungsurlaub": "Educational leave",
+    "Bildungsgutschein / Bildungsscheck": "Education voucher / training voucher",
+    "Projektförderung": "Project funding", "Andere...": "Other...",
+    "Selbst getroffen": "Decided myself",
+    "Freigabe von Arbeitgeber für Zeit": "Employer approval for time",
+    "Freigabe von Arbeitgeber für Finanzierung": "Employer approval for funding",
+    "Freigabe von Arbeitgeber für Zeit & Finanzierung": "Employer approval for time and funding",
+    "Vorschlag/Anweisung von Arbeitgeber": "Employer suggestion / instruction",
+    "Vorschlag von Kolleg:innen": "Suggestion from colleagues",
+    "Passt zu meiner täglichen Arbeit": "Fits my daily work",
+    "Relevanz für die Arbeit mit Jugendlichen": "Relevance to working with youth",
+    "Schwerpunkt auf Stärken und Identitätsfindung": "Focus on strengths and identity development",
+    "Viele praktische Übungen und direkt nutzbare Methoden": "Many practical exercises and directly usable methods",
+    "Fachliche Kompetenz der durchführenden Person": "Professional expertise of the trainer",
+    "Empfehlung": "Recommendation", "Dauer und zeitlicher Aufwand": "Duration and time commitment",
+    "Präsenzformat": "In-person format", "Ort und Erreichbarkeit": "Location and accessibility",
+    "Kosten oder verfügbare Finanzierung": "Cost or available funding",
+    "Anerkennung, Zertifikat oder beruflicher Nutzen": "Recognition, certificate, or professional benefit",
+    "Das Thema ist für meine aktuelle Arbeit relevant": "The topic is relevant to my current work",
+    "Ich wollte Jugendliche besser unterstützen können": "I wanted to better support young people",
+    "Ich wollte mehr über Stärken und Identitätsfindung erfahren": "I wanted to learn more about strengths and identity development",
+    "Ich wollte neue Methoden und Materialien kennenlernen": "I wanted to discover new methods and materials",
+    "Ich habe in meiner Arbeit einen konkreten Lernbedarf bemerkt": "I noticed a specific learning need in my work",
+    "Die Fortbildung wurde mir empfohlen": "The training was recommended to me",
+    "Die Teilnahme war für meine Rolle oder Arbeit erwartet": "Participation was expected for my role or work",
+    "Ich wollte mich beruflich weiterentwickeln": "I wanted to develop professionally",
+    "Das Thema hat mich persönlich interessiert": "The topic interested me personally",
+    "Die Fortbildung war gut erreichbar oder zeitlich passend": "The training was accessible or conveniently scheduled",
+    "Mehr Wissen zum Thema": "More knowledge of the topic",
+    "Konkrete Methoden für Gespräche mit Jugendlichen": "Specific methods for conversations with young people",
+    "Mehr Sicherheit bei sensiblen oder schwierigen Gesprächen": "More confidence in sensitive or difficult conversations",
+    "Jugendliche besser in ihren Stärken erkennen und fördern": "Better recognition and development of young people's strengths",
+    "Besser auf unterschiedliche Lebenswelten eingehen können": "Better ability to respond to different life circumstances",
+    "Ideen für die direkte Anwendung im Arbeitsalltag": "Ideas for direct use in everyday work",
+    "Austausch und neue Perspektiven von anderen Fachkräften": "Exchange and new perspectives from other professionals",
+    "Mehr Klarheit darüber, wie ich Jugendliche begleiten kann": "More clarity about how to guide young people",
+    "Einen Nachweis oder eine berufliche Qualifikation erhalten": "A certificate or professional qualification",
+    "Ich hatte keine konkreten Erwartungen": "I had no specific expectations",
+    "Internetsuche": "Internet search", "Erfahrungsberichte von Kolleg:innen": "Colleagues' experiences",
+    "Staatliche Angebote": "Government offerings", "Sozialämter": "Social welfare offices",
+    "Arbeitsagentur": "Employment agency",
+    "Passende Fortbildungen waren schwer zu finden": "Suitable training was difficult to find",
+    "Es war unklar, welche Fortbildung zu meinem Bedarf passt": "It was unclear which training suited my needs",
+    "Die Freigabe durch meinen Arbeitgeber war schwierig": "Employer approval was difficult",
+    "Die Kosten konnten nicht oder nur teilweise übernommen werden": "Costs could not be covered, or only partially",
+    "Es fehlte Zeit neben der regulären Arbeit": "There was not enough time alongside regular work",
+    "Vertretung oder Personalmangel erschwerte die Teilnahme": "Cover arrangements or staff shortages made participation difficult",
+    "Termin oder Dauer passten nicht": "The schedule or duration did not fit",
+    "Anreise oder Veranstaltungsort waren schwierig": "Travel or the venue was difficult",
+    "Das Format passte nicht zu meinen Lernbedürfnissen": "The format did not suit my learning needs",
+    "Inhalte oder Nutzen waren vorab nicht klar genug": "The content or benefits were not clear enough beforehand",
+    "Ich hatte während der Teilnahme zu viele Unterbrechungen": "I experienced too many interruptions during participation",
+    "Es gab keine besonderen Herausforderungen": "There were no particular challenges",
+    "Zu wenig Zeit": "Too little time", "Zu wenig finanzielle Mittel": "Insufficient funding",
+    "Fehlende Freigabe von Arbeitgeber": "Lack of employer approval",
+    "Persönliche Zeitplanung": "Personal scheduling", "Fehlende Angebote": "Lack of available programs",
+    "Logistische Gründe": "Logistical reasons",
+    "Digital - 1 Stunde": "Online – 1 hour", "Vor Ort - 8 Stunden": "In person – 8 hours",
+    "Vor Ort – 4x 2 Stunden": "In person – 4 × 2 hours",
+    "Vor Ort – 4 Stunden plus Digital – 4x 2 Stunden": "In person – 4 hours plus online – 4 × 2 hours",
+    "Fort- / Weiterbildung": "Training / education program", "Anbieter": "Provider",
+    "Die Inhalte waren relevant für meine Arbeit": "The content was relevant to my work",
+    "Die Methoden waren praktisch und direkt anwendbar": "The methods were practical and directly applicable",
+    "Die Beispiele passten zur Arbeit mit Jugendlichen": "The examples suited working with young people",
+    "Die Fortbildung hat mein Wissen erweitert": "The training expanded my knowledge",
+    "Die Übungen und der Austausch waren hilfreich": "The exercises and exchange were helpful",
+    "Die Leitung der Fortbildung war fachlich überzeugend": "The trainer demonstrated convincing professional expertise",
+    "Es gab Raum für Fragen und eigene Erfahrungen": "There was room for questions and personal experiences",
+    "Ich habe neue Perspektiven kennengelernt": "I discovered new perspectives",
+    "Die Atmosphäre war offen und wertschätzend": "The atmosphere was open and appreciative",
+    "Das Format, der Ort oder die Dauer waren passend": "The format, location, or duration suited me",
+    "Mehr Wissen über Stärken und Identitätsentwicklung": "More knowledge of strengths and identity development",
+    "Konkrete Gesprächsleitfäden oder Fragen": "Specific conversation guides or questions",
+    "Übungen und Materialien für die praktische Arbeit": "Exercises and materials for practical work",
+    "Mehr Sicherheit, das Thema anzusprechen": "More confidence in raising the topic",
+    "Unterstützung beim Umgang mit schwierigen Reaktionen oder sensiblen Themen": "Support in handling difficult reactions or sensitive topics",
+    "Mehr Zeit für vertiefte Gespräche": "More time for in-depth conversations",
+    "Ein geeigneter, geschützter Raum für Gespräche": "A suitable, safe space for conversations",
+    "Unterstützung durch Kolleginnen, Kollegen oder Leitung": "Support from colleagues or management",
+    "Materialien, die verschiedene Sprachen und Lebenswelten berücksichtigen": "Materials reflecting different languages and life circumstances",
+    "Bessere Möglichkeiten, Jugendliche zum Mitmachen zu motivieren": "Better ways to motivate young people to participate",
+    "Ansprechpersonen oder Fachstellen für weiterführende Unterstützung": "Contacts or specialist services for further support",
+    "Mir fehlt aktuell nichts davon": "I am not currently missing any of these",
+}
+GERMAN_REFERENCE = {
+    "Hours per training activity": ["1–4 h", "5–10 h", "11–20 h", "21–40 h",
+                                    "41–100 h", "101–500 h", "501 h or more"],
+    "Germany (2022) %": [29, 30, 14, 13, 8, 4, 1],
+}
+REFERENCE_CITATION = (
+    "Bundesministerium für Bildung und Forschung (BMBF). (2024). "
+    "Weiterbildungsverhalten in Deutschland 2022. "
+    "https://www.bmftr.bund.de/SharedDocs/Publikationen/DE/1/26667_AES-Trendbericht_2022.html"
+)
 # Compact structural checks, not a duplicate of the full export schema.
 OPTION_COUNTS = dict(zip(CHECKBOX, (6, 5, 6, 12, 10, 10, 6, 12, 7, 10, 12)))
 CONSENT_LABELS = (
@@ -49,13 +196,18 @@ def require(condition, message):
 
 
 def load_export(path):
-    """Load every column as text; normalize surrounding whitespace and blanks."""
+    """Normalize structured fields and blanks, preserving nonblank free text verbatim."""
     try:
         frame = pl.read_csv(path, infer_schema=False)
     except (OSError, UnicodeError, pl.exceptions.PolarsError) as exc:
         # Parser errors can contain private respondent values; do not display them.
         raise ValueError(f"Could not read {path.name}. Check the local CSV export.") from exc
-    return frame.select(pl.all().str.strip_chars().replace("", None))
+    return frame.select([
+        (pl.when(pl.col(column).str.strip_chars() != "").then(pl.col(column)).otherwise(None)
+         if any(column.startswith(f"Question {q} - ") for q in FREE_TEXT)
+         else pl.col(column).str.strip_chars().replace("", None)).alias(column)
+        for column in frame.columns
+    ])
 
 
 def question_columns(columns):
@@ -67,7 +219,7 @@ def question_columns(columns):
             by_q.setdefault(int(match[1]), []).append(column)
         else:
             require(not column.startswith("Question"), "Malformed question column header.")
-    require(set(by_q) == set(QUESTION_IDS + FREE_TEXT),
+    require(set(by_q) == set((1,) + QUESTION_IDS),
             "Survey question IDs changed; review the export before analysis.")
     require({"ID", "completed"}.issubset(columns), "Required export metadata is missing.")
     for q in SINGLE + (25,):
@@ -95,7 +247,7 @@ def validate_exports(source, target_source):
     require(source.columns == target_source.columns,
             "The two exports must have identical column schemas and order.")
     by_q = question_columns(source.columns)
-    for name, frame in (("Overall export", source), ("Target export", target_source)):
+    for name, frame in (("Overall export", source), ("Target Audience export", target_source)):
         require(frame["ID"].null_count() == 0 and frame["ID"].n_unique() == frame.height,
                 f"{name}: IDs must be nonempty and unique.")
         require(frame.filter(pl.col("completed").is_null()
@@ -118,12 +270,12 @@ def validate_exports(source, target_source):
                                  & ~pl.col(column).is_in(ALLOWED_SINGLE[q])).is_empty(),
                     f"{name}: Q{q} contains an unrecognized category; review the export vocabulary.")
     require(target_source.join(source.select("ID"), on="ID", how="anti").is_empty(),
-            "Target export contains respondents absent from the overall export.")
+            "Target Audience export contains respondents absent from the overall export.")
     shared = source.join(target_source.select("ID"), on="ID", how="semi").sort("ID")
     require(shared.equals(target_source.sort("ID")),
             "Shared rows differ after whitespace/blank normalization; reconcile the exports.")
     require(same_ids(source.filter(pl.col(by_q[25][0]) == "4"), target_source),
-            "Target export must be exactly the Q25=4 subset of the entire overall export.")
+            "Target Audience export must be exactly the Q25=4 subset of the entire overall export.")
     return by_q
 
 
@@ -136,41 +288,16 @@ def load_data(directory=INPUT_DIR):
     source = load_export(Path(directory) / "data.csv")
     target_source = load_export(Path(directory) / "target-audience.csv")
     by_q = validate_exports(source, target_source)
-    sources = {"Overall": source, "Target": target_source}
+    sources = {"Overall": source, "Target Audience": target_source}
     groups = {name: frame.filter(eligible_expr(by_q)) for name, frame in sources.items()}
-    require(same_ids(groups["Overall"].filter(pl.col(by_q[25][0]) == "4"), groups["Target"]),
-            "Eligible target membership disagrees with the Q25=4 selection rule.")
+    require(same_ids(groups["Overall"].filter(pl.col(by_q[25][0]) == "4"), groups["Target Audience"]),
+            "Eligible Target Audience membership disagrees with the Q25=4 selection rule.")
     return sources, groups, by_q
 
 
-def consent_audit(sources, by_q):
-    """Aggregate source-level consent, exclusion, and inclusion counts."""
-    consent, quote = by_q[1]
-    eligible = eligible_expr(by_q)
-    return pl.concat([
-        frame.select(
-            pl.lit(name).alias("Group"), pl.len().alias("Source rows"),
-            (pl.col("completed") == "1").sum().alias("Completed"),
-            (pl.col("completed") != "1").sum().alias("Incomplete"),
-            pl.col(consent).is_not_null().sum().alias("Processing consent present"),
-            pl.col(consent).is_null().sum().alias("Processing consent missing"),
-            ((pl.col("completed") == "1") & pl.col(consent).is_null()).sum()
-            .alias("Completed without processing consent"),
-            pl.col(quote).is_not_null().sum().alias("Optional quotation consent present"),
-            pl.col(quote).is_null().sum().alias("Optional quotation consent missing"),
-            (~eligible).sum().alias("Excluded"), eligible.sum().alias("Included"),
-            (eligible & pl.col(quote).is_not_null()).sum().alias("Included with quotation consent"),
-        )
-        for name, frame in sources.items()
-    ])
-
-
-def question_title(q, by_q):
-    return by_q[q][0].split(" - ", 2)[1]
-
 
 def answered_expr(q, by_q, column=None):
-    if q in CHECKBOX:
+    if q in CHECKBOX + FREE_TEXT:
         return pl.any_horizontal([pl.col(c).is_not_null() for c in by_q[q]])
     return pl.col(column or by_q[q][0]).is_not_null()
 
@@ -186,7 +313,7 @@ def denominators(q, groups, by_q, column=None):
 
 
 def distribution(q, groups, by_q, column=None):
-    """Category counts, available-answer percentages, and Target − Overall pp."""
+    """Count raw categories before display translation; differences are percentage points."""
     column = column or by_q[q][0]
     if q in CHECKBOX:
         labels = [c.split(" - ", 2)[2] for c in by_q[q]]
@@ -210,7 +337,9 @@ def distribution(q, groups, by_q, column=None):
         percent = (pl.col(f"{name}_n") * 100.0 / answered if answered
                    else pl.lit(None, dtype=pl.Float64))
         result = result.with_columns(percent.alias(f"{name}_%"))
-    return result.with_columns((pl.col("Target_%") - pl.col("Overall_%")).alias("Diff_pp"))
+    result = result.with_columns(
+        (pl.col("Target Audience_%") - pl.col("Overall_%")).alias("Diff_pp"))
+    return result.with_columns(pl.col("Response").replace(DISPLAY_LABELS))
 
 
 def ordinal_summary(groups, column):
@@ -220,7 +349,8 @@ def ordinal_summary(groups, column):
         frame.select(pl.lit(name).alias("Group"),
                      rating.quantile(0.25, interpolation="lower").alias("Lower quartile"),
                      rating.quantile(0.5, interpolation="lower").alias("Lower median"),
-                     rating.quantile(0.75, interpolation="lower").alias("Upper quartile"))
+                     rating.quantile(0.75, interpolation="lower").alias("Upper quartile"),
+                     rating.mean().alias("Mean"))
         for name, frame in groups.items()
     ])
 
@@ -235,7 +365,8 @@ def draw_distribution(table, denom):
         positions.append(cursor + height / 2)
         cursor += height
     fig, ax = plt.subplots(figsize=(12, max(3.4, cursor + 1.3)), layout="constrained")
-    for name, offset, color in (("Overall", -0.17, "#376B92"), ("Target", 0.17, "#C36B20")):
+    for name, offset, color in (("Overall", -0.17, "#00D6AB"),
+                                ("Target Audience", 0.17, "#D1BDF2")):
         answered = denom.filter(pl.col("Group") == name)["Answered"].item()
         if answered:
             values = table[f"{name}_%"].to_list()
@@ -252,7 +383,8 @@ def draw_distribution(table, denom):
     ax.set_xlim(0, 116)
     ax.set_xticks([0, 25, 50, 75, 100])
     ax.set_xlabel("Percent of answered responses (%)")
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2, frameon=False, fontsize=9)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2,
+              frameon=False, fontsize=9)
     ax.grid(axis="x", alpha=0.18)
     ax.set_axisbelow(True)
     for side in ("top", "right"):
@@ -261,45 +393,67 @@ def draw_distribution(table, denom):
 
 
 def render_question(q, groups, by_q):
-    st.header(f"Q{q} — {question_title(q, by_q)}")
+    st.header(QUESTION_TITLES[q])
+    if q in FREE_TEXT:
+        for name, frame in groups.items():
+            st.subheader(name)
+            responses = frame.filter(answered_expr(q, by_q))
+            if q == 21:
+                normalized = (pl.col(by_q[q][0]).str.to_lowercase()
+                              .str.replace_all(r"\s+", " ").str.strip_chars())
+                responses = responses.filter(normalized != "ich war in elternzeit")
+            fields = {
+                column: (DISPLAY_LABELS[column.split(" - ", 2)[2]]
+                         if q in (12, 23) else QUESTION_TITLES[q])
+                for column in by_q[q]
+            }
+            st.dataframe(responses.select(by_q[q]).rename(fields), hide_index=True,
+                         width="stretch")
+        if q == 21:
+            st.caption("The parental-leave response is excluded from this display.")
+        return
     if q == 25:
-        st.warning("Selection artifact: Target is defined by Q25 = 4. Its distribution is a "
-                   "selection-rule check, not evidence of an independently observed preference difference.")
+        st.warning("The Target Audience is defined by their interest in the topic (4 out of 4 for Q25)")
     if q in CHECKBOX:
         st.caption("Multiple selections allowed. At least one selection defines an answered question; "
                    "all-blank questions are missing. Percentages can sum to more than 100%.")
     if q in RATING:
-        st.caption("Ordered rating codes 1–4: higher is better. Quartiles and median use the lower "
-                   "observed category; codes are not averaged.")
+        st.caption("Ordered rating codes 1–4: the higher the better.")
     for column in (by_q[q] if q in RATING else [None]):
         if q == 22:
-            st.subheader(column.split(" - ", 2)[2])
+            st.subheader(DISPLAY_LABELS[column.split(" - ", 2)[2]])
         denom = denominators(q, groups, by_q, column)
         table = distribution(q, groups, by_q, column)
-        st.table(denom)
         fig = draw_distribution(table, denom)
         try:
             st.pyplot(fig, width="stretch")
         finally:
             plt.close(fig)
-        st.table(table.with_columns(pl.col("Overall_%", "Target_%", "Diff_pp").round(1)).rename({
+        st.table(table.with_columns(pl.col("Overall_%", "Target Audience_%", "Diff_pp").round(1)).rename({
             "Overall_n": "Overall count", "Overall_%": "Overall %",
-            "Target_n": "Target count", "Target_%": "Target %",
-            "Diff_pp": "Target − Overall (pp)",
+            "Target Audience_n": "Target Audience count", "Target Audience_%": "Target Audience %",
+            "Diff_pp": "Target Audience − Overall (pp)",
         }))
         if q in RATING:
             st.table(ordinal_summary(groups, column))
-        st.caption("Percentages use the answered denominators above. Differences are Target minus "
+        if q == 10:
+            st.subheader("Germany: hours per training activity (2022)")
+            st.caption("BMBF, Table 12 (p. 46): non-formal training activities of adults aged "
+                       "18–64, with details collected for up to four activities per respondent. "
+                       "These are hours per activity, not annual totals, so they cannot be "
+                       "compared directly with Q10 or rebinned into its response categories.")
+            st.table(pl.DataFrame(GERMAN_REFERENCE))
+            st.caption("Published percentages total 99% due to rounding; values are shown unchanged.")
+            st.caption(REFERENCE_CITATION)
+        st.caption("Survey percentages use the answered denominators in the chart legends. Differences are Target Audience minus "
                    "Overall in percentage points (pp); undefined percentages remain missing, not zero.")
 
 
 def main():
-    st.set_page_config(page_title="Survey comparison", layout="wide")
-    st.title("Survey comparison: Target versus Overall")
-    st.info("Only free-text questions are omitted. Q9, Q12, Q18, Q21, Q23 and Q29 are excluded. "
-            "Export metadata are not survey questions; there is no Q28 in this survey export.")
+    st.set_page_config(page_title="DS_06 Survey", layout="wide")
+    st.title("What is the landscape of training for coaches, educators, and freelancers in Germany for programs addressing working with the youth and which lessons can be taken away from it to design a new training program?")
     try:
-        sources, groups, by_q = load_data()
+        _, groups, by_q = load_data()
     except ValueError as exc:
         st.error(str(exc))
         st.stop()
@@ -309,55 +463,25 @@ def main():
         st.stop()
 
     overall_metric, target_metric = st.columns(2)
-    overall_metric.metric("Eligible Overall (ALL)", groups["Overall"].height)
-    target_metric.metric("Eligible Target (Q25 = 4)", groups["Target"].height)
-    st.caption("Target respondents are also included in Overall. These are overlapping descriptive "
+    overall_metric.metric("Eligible Overall", groups["Overall"].height)
+    target_metric.metric("Eligible Target Audience", groups["Target Audience"].height)
+    st.caption("Target Audience respondents are also included in Overall. These are overlapping descriptive "
                "cohorts, not independent groups.")
-    with st.expander("Methodology and setup"):
+    with st.expander("Methodology"):
         st.markdown("""
-- **Eligibility:** completed = 1 and nonempty processing consent (the first Q1 checkbox).
-  Optional quotation consent is not required; termination metadata are not a filter.
-- **Normalization and validation:** surrounding whitespace is stripped; blanks become null.
-  Both exports must have unique, nonempty IDs, identical schemas, identical normalized shared
-  rows, recognized survey questions and expected completion, checkbox and rating encodings.
-  Target must equal the Q25 = 4 subset before and after eligibility filtering.
+- **Eligibility:** The respondent completed the survey and consented to the processing of their response.
 - **Denominators:** single-choice questions and each rating item use their nonmissing responses.
-  Checkbox questions are answered only if at least one option is selected. Within answered
-  questions, blank options mean unselected; wholly blank questions are excluded, not all-negative.
-  Routing or nonresponse may explain missingness; these cannot be distinguished from the CSV alone.
-- **Distributions:** original German labels are retained. Checkbox options include never-selected
-  choices. Single-choice vocabulary follows the notebook's observed export categories, including
-  categories with zero eligible responses; it does not invent unobserved questionnaire options.
-  Counts and percentages are shown separately; differences are Target − Overall in percentage points.
-- **Ordinal summaries:** rating codes 1–4 are ordered, higher is better. Quartiles and median use
+  Checkbox questions are defined as answered only if at least one option is selected. Within answered
+  questions, blank options mean unselected. Routing or nonresponse may explain missingness.
+- **Ordinal summaries:** rating codes 1–4 are ordered, the higher the better. Quartiles and median use
   the observed category at index floor((n − 1) × p), with p = 0.25, 0.5, 0.75. Empty items have
-  missing summaries. Time, experience and budget brackets remain categories, not numeric midpoints.
-- **Interpretation:** small, selected, overlapping samples do not establish representativeness or
-  causality. No independent-group tests, p-values or confidence intervals are used. Q25 differences
-  are imposed by the target selection rule.
-- **Privacy:** aggregate outputs only; no respondent IDs, contact details or free-text answers are
-  displayed. Small aggregate cells may still be sensitive; review before public sharing.
+  missing summaries.
 """)
-        st.caption("Setup: python -m pip install -r requirements.txt · Run: streamlit run app.py. "
-                   "Both CSV files are loaded beside app.py; the notebook is not executed.")
 
     tabs = st.tabs([f"Q{q}" for q in QUESTION_IDS])
     for q, tab in zip(QUESTION_IDS, tabs):
         with tab:
-            if q == 1:
-                st.header(f"Q1 — {question_title(q, by_q)}")
-                st.subheader("Processing consent")
-                st.write(CONSENT_LABELS[0])
-                st.subheader("Optional quotation consent")
-                st.write(CONSENT_LABELS[1])
-                st.caption("Source-level consent audit; counts only. Included = completed with processing "
-                           "consent. Excluded = incomplete + completed without processing consent. "
-                           "Optional quotation consent never determines inclusion.")
-                audit = consent_audit(sources, by_q)
-                st.table(audit.drop("Group").transpose(
-                    include_header=True, header_name="Measure", column_names=audit["Group"].to_list()))
-            else:
-                render_question(q, groups, by_q)
+            render_question(q, groups, by_q)
 
 
 if __name__ == "__main__":
